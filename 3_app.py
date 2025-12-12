@@ -30,16 +30,8 @@ st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-
 st.sidebar.title("AyurSafe 🌿")
 st.sidebar.write("**AI-Powered Toxicity Screening for Phytochemicals**")
 st.sidebar.markdown("---")
-
-# MODE SELECTION
 mode = st.sidebar.radio("Select Mode:", ["Single Molecule Scanner", "Batch Upload (CSV)"])
 
-# COMMERCIAL CONTACT INFO (New)
-st.sidebar.markdown("---")
-st.sidebar.info(
-    "💼 **Commercial License**\n\nThe public demo is limited to small batches. For private, unlimited server deployment for your lab:\n\n[📩 **Contact Founder**](mailto:your.email@gmail.com)")
-
-# --- MAIN PAGE: SINGLE MOLECULE ---
 if mode == "Single Molecule Scanner":
     st.title("🧪 In-Silico Toxicity Predictor")
     st.write("Enter a chemical structure (SMILES format) to predict its safety.")
@@ -73,7 +65,6 @@ if mode == "Single Molecule Scanner":
 
                 # 2. PREDICT
                 features = featurizer.featurize([smiles_input])
-                probability = model.predict_proba(features)[0][1]
 
                 # 3. SHOW RESULTS
                 st.markdown("---")
@@ -94,29 +85,14 @@ if mode == "Single Molecule Scanner":
             except Exception as e:
                 st.error(f"Could not process molecule. Check SMILES format. Error: {e}")
 
-# --- MAIN PAGE: BATCH MODE (Freemium Locked) ---
 elif mode == "Batch Upload (CSV)":
     st.title("📂 Bulk Screening Pipeline")
-
-    # WARNING MESSAGES
-    st.warning("⚠️ Public Demo Limit: Maximum 5 molecules per file.")
-    st.info("🔒 For bulk processing (unlimited) and privacy protection, contact us for an Enterprise License.")
 
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         if 'SMILES' in df.columns:
-
-            # --- THE LOCK (Business Logic) ---
-            if len(df) > 5:
-                st.error(f"❌ Upload failed! Your file has {len(df)} molecules.")
-                st.error("The Free Public Version is limited to 5 molecules.")
-                st.markdown(
-                    "To analyze this file, please [Contact Founder](mailto:your.email@gmail.com) for a Pro License.")
-
-            else:
-                # UNLOCKED: Run analysis
                 st.write(f"Loaded {len(df)} molecules.")
                 if st.button("Run AI Screening"):
                     progress_bar = st.progress(0)
@@ -133,10 +109,7 @@ elif mode == "Batch Upload (CSV)":
                         progress_bar.progress((i + 1) / len(df))
 
                     df['Toxicity_Risk'] = results
-                    df = df.sort_values(by='Toxicity_Risk', ascending=True)
 
-                    st.write("### 🏆 Top Safest Candidates")
-                    st.dataframe(df)
 
                     st.download_button("Download Full Report", df.to_csv(), "ai_report.csv")
         else:
