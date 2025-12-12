@@ -1,0 +1,11 @@
+streamlit
+deepchem
+rdkit
+joblib
+scikit-learn
+pandas
+stmol
+py3Dmol
+ipython_genutils
+torch
+numpy<2.0.0

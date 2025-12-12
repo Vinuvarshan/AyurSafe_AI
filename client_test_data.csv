@@ -1,0 +1,11 @@
+Name,SMILES
+Vitamin C,OCC(O)C1(OC(=O)C(=C1O)O)
+Aspirin,CC(=O)OC1=CC=CC=C1C(=O)O
+Paracetamol,CC(=O)NC1=CC=C(O)C=C1
+Caffeine,CN1C=NC2=C1C(=O)N(C(=O)N2C)C
+Pesticide_DDT,ClC1=CC=C(C(C2=CC=C(Cl)C=C2)C(Cl)(Cl)Cl)C=C1
+Cyanide_Derivative,N#CC1=CC=CC=C1
+Toxic_Arsenic,O=[As]C1=CC=CC=C1
+Vanilla_Extract,COC1=C(C=CC(=C1)C=O)O
+Glucose,OCC1OC(O)C(O)C(O)C1O
+Lead_Acetate,CC(=O)O[Pb](OC(C)=O)(OC(C)=O)OC(C)=O
