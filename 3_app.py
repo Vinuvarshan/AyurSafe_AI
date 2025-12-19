@@ -89,13 +89,15 @@ if st.session_state.is_admin:
     st.sidebar.success(f"👤 **{st.session_state.current_user}**")
 
     # VISITOR COUNTER (With Cache Buster)
-    timestamp = int(time.time())  # Get current seconds to force refresh
+    # VISITOR COUNTER (Reliable GitHub-Style Badge)
     st.sidebar.markdown(
-        f"""
-            <div style="text-align: center;">
-                <img src="https://visit-counter.vercel.app/counter.png?page=ayursafe_ai_demo_v2&t={timestamp}" alt="Visitors">
-            </div>
-            """,
+        """
+        <div style="text-align: center;">
+            <a href="https://github.com/vinu/ayursafe">
+                <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fayursafeai.streamlit.app&count_bg=%232E7D32&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=Total+Visitors&edge_flat=false" alt="Hits"/>
+            </a>
+        </div>
+        """,
         unsafe_allow_html=True
     )
     st.sidebar.caption("Total Visitors")
