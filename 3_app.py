@@ -68,21 +68,25 @@ def draw_radar_chart(features, title):
     return fig
 
 
-# --- SIDEBAR & SECRET ADMIN LOGIC ---
+# --- SECURITY & ADMIN LOGIC ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
 
-# 1. CHECK FOR SECRET URL PARAMETER
+# 1. GET THE SECRET TOKEN FROM CLOUD
+try:
+    secret_token = st.secrets["ADMIN_ACCESS_TOKEN"]
+except FileNotFoundError:
+    secret_token = "admin"  # Fallback for local testing
+
+# 2. CHECK URL FOR THE MAGIC WORD
 query_params = st.query_params
-is_admin = query_params.get("access") == "admin"
-is_premium = False
+is_admin = query_params.get("mode") == secret_token
 
-# 2. SHOW ADMIN TOOLS ONLY IF SECRET URL IS USED
+# 3. UNLOCK IF ADMIN
 if is_admin:
-    st.sidebar.markdown("---")
-    st.sidebar.error("🕵️ **Admin Mode Active**")
+    st.sidebar.success("🔓 **Admin Access Active**")
 
-    # VISITOR COUNTER (Visible only to you)
+    # Show Visitor Counter (Only for you)
     st.sidebar.markdown(
         """
         <div style="text-align: center;">
@@ -91,25 +95,11 @@ if is_admin:
         """,
         unsafe_allow_html=True
     )
-    st.sidebar.caption("Live Traffic Count")
-
-    # LICENSE KEY INPUT (Visible only to you)
-    license_key = st.sidebar.text_input("🔑 License Key:", type="password")
-    # Load the password securely from Streamlit Secrets
-    try:
-        correct_password = st.secrets["ADMIN_PASSWORD"]
-    except FileNotFoundError:
-        correct_password = "Admin_Setup_Required"  # Fallback if secrets aren't set
-
-    if license_key == correct_password:
-        is_premium = True
-        st.sidebar.success("✅ Unlimited Access")
-
+    st.sidebar.caption("Total Visitors")
+    st.sidebar.markdown("---")
 else:
-    # PUBLIC VIEW (Clean Interface)
+    # Public View
     st.sidebar.caption("Research Edition v2.0")
-
-st.sidebar.markdown("---")
 
 # MODE SELECTION
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
@@ -121,8 +111,8 @@ run_advanced = st.sidebar.checkbox("Advanced (PAINS + Complexity)", value=False)
 run_radar = st.sidebar.checkbox("Generate Radar Plot", value=False)
 
 st.sidebar.markdown("---")
-# Public Message for Free Users
-if not is_premium:
+
+if not is_admin:
     st.sidebar.info("🔒 **Free Version**\nBatch Limit: 5 Molecules.")
     st.sidebar.markdown("[📩 **Contact for Premium**](mailto:your.email@gmail.com)")
 
@@ -213,16 +203,15 @@ elif mode == "Batch Screening (CSV)":
     if uploaded:
         df = pd.read_csv(uploaded)
 
-        # --- THE SECRET LIMIT LOGIC ---
+        # --- THE MAGIC LINK LIMIT LOGIC ---
         limit = 5
-        if is_premium:
-            st.success(f"🔓 Premium Active: Analyzing {len(df)} molecules (Unlimited)")
+        if is_admin:  # If the URL has the secret token, you are UNLIMITED
+            st.success(f"🔓 Admin Mode: Analyzing {len(df)} molecules (Unlimited)")
         else:
             if len(df) > limit:
                 st.error(f"❌ **Free Limit Exceeded!**")
                 st.error(f"Your file has {len(df)} molecules. The Free version allows only {limit}.")
-                st.markdown("### To Unlock Unlimited Access:")
-                st.markdown("[📩 **Contact Us for a License Key**](mailto:your.email@gmail.com)")
+                st.markdown("[📩 **Contact Us for Premium**](mailto:your.email@gmail.com)")
                 st.stop()
             else:
                 st.info(f"Free Mode: Analyzing {len(df)} molecules (Limit: {limit})")
