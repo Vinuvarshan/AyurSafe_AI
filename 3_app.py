@@ -4,11 +4,11 @@ import joblib
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from rdkit import Chem
 from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors
 from stmol import showmol
 import py3Dmol
-
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
 
@@ -88,13 +88,14 @@ st.sidebar.markdown("---")
 if st.session_state.is_admin:
     st.sidebar.success(f"👤 **{st.session_state.current_user}**")
 
-    # VISITOR COUNTER (Only visible to Admin)
+    # VISITOR COUNTER (With Cache Buster)
+    timestamp = int(time.time())  # Get current seconds to force refresh
     st.sidebar.markdown(
-        """
-        <div style="text-align: center;">
-            <img src="https://visit-counter.vercel.app/counter.png?page=ayursafe_ai_demo_v2" alt="Visitors">
-        </div>
-        """,
+        f"""
+            <div style="text-align: center;">
+                <img src="https://visit-counter.vercel.app/counter.png?page=ayursafe_ai_demo_v2&t={timestamp}" alt="Visitors">
+            </div>
+            """,
         unsafe_allow_html=True
     )
     st.sidebar.caption("Total Visitors")
