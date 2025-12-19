@@ -12,6 +12,12 @@ import py3Dmol
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
 
+# --- SESSION STATE INITIALIZATION (Keeps you logged in) ---
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = "Guest"
+
 # --- CUSTOM CSS ---
 st.markdown("""
     <style>
@@ -68,25 +74,40 @@ def draw_radar_chart(features, title):
     return fig
 
 
-# --- SECURITY & ADMIN LOGIC ---
+# --- SIDEBAR & AUTHENTICATION ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
 
-# 1. GET THE SECRET TOKEN FROM CLOUD
-try:
-    secret_token = st.secrets["ADMIN_ACCESS_TOKEN"]
-except FileNotFoundError:
-    secret_token = "admin"  # Fallback for local testing
+# === LOGIN SYSTEM ===
+st.sidebar.markdown("---")
+if not st.session_state.is_admin:
+    # LOGIN FORM
+    with st.sidebar.expander("🔐 Admin Login"):
+        login_email = st.text_input("Email")
+        login_pass = st.text_input("Password", type="password")
 
-# 2. CHECK URL FOR THE MAGIC WORD
-query_params = st.query_params
-is_admin = query_params.get("mode") == secret_token
+        if st.button("Log In"):
+            # Get Secrets
+            try:
+                valid_emails = st.secrets["ADMIN_EMAILS"].split(",")
+                valid_pass = st.secrets["ADMIN_PASSWORD"]
+            except:
+                valid_emails = []
+                valid_pass = "admin"  # Fallback
 
-# 3. UNLOCK IF ADMIN
-if is_admin:
-    st.sidebar.success("🔓 **Admin Access Active**")
+            # Check Credentials
+            if login_email in valid_emails and login_pass == valid_pass:
+                st.session_state.is_admin = True
+                st.session_state.current_user = login_email
+                st.rerun()  # Refresh to unlock
+            else:
+                st.error("Invalid Email or Password")
+else:
+    # LOGGED IN VIEW
+    st.sidebar.success(f"👤 **{st.session_state.current_user}**")
+    st.sidebar.caption("Admin Access Active")
 
-    # Show Visitor Counter (Only for you)
+    # VISITOR COUNTER (Only visible to Admin)
     st.sidebar.markdown(
         """
         <div style="text-align: center;">
@@ -96,10 +117,13 @@ if is_admin:
         unsafe_allow_html=True
     )
     st.sidebar.caption("Total Visitors")
-    st.sidebar.markdown("---")
-else:
-    # Public View
-    st.sidebar.caption("Research Edition v2.0")
+
+    if st.sidebar.button("Log Out"):
+        st.session_state.is_admin = False
+        st.session_state.current_user = "Guest"
+        st.rerun()
+
+st.sidebar.markdown("---")
 
 # MODE SELECTION
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
@@ -112,7 +136,8 @@ run_radar = st.sidebar.checkbox("Generate Radar Plot", value=False)
 
 st.sidebar.markdown("---")
 
-if not is_admin:
+# SHOW FREE LIMIT WARNING IF NOT LOGGED IN
+if not st.session_state.is_admin:
     st.sidebar.info("🔒 **Free Version**\nBatch Limit: 5 Molecules.")
     st.sidebar.markdown("[📩 **Contact for Premium**](mailto:your.email@gmail.com)")
 
@@ -203,10 +228,10 @@ elif mode == "Batch Screening (CSV)":
     if uploaded:
         df = pd.read_csv(uploaded)
 
-        # --- THE MAGIC LINK LIMIT LOGIC ---
+        # --- THE LOGIN CHECK ---
         limit = 5
-        if is_admin:  # If the URL has the secret token, you are UNLIMITED
-            st.success(f"🔓 Admin Mode: Analyzing {len(df)} molecules (Unlimited)")
+        if st.session_state.is_admin:  # UNLOCKED IF LOGGED IN
+            st.success(f"🔓 Premium Active: Analyzing {len(df)} molecules (Unlimited)")
         else:
             if len(df) > limit:
                 st.error(f"❌ **Free Limit Exceeded!**")
