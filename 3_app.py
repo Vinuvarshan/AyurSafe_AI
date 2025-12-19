@@ -12,7 +12,7 @@ import py3Dmol
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
 
-# --- SESSION STATE INITIALIZATION (Keeps you logged in) ---
+# --- SESSION STATE INITIALIZATION ---
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "current_user" not in st.session_state:
@@ -78,34 +78,15 @@ def draw_radar_chart(features, title):
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
 
-# === LOGIN SYSTEM ===
+# === STEALTH LOGIN LOGIC ===
+query_params = st.query_params
+show_login = query_params.get("access") == "login"
+
 st.sidebar.markdown("---")
-if not st.session_state.is_admin:
-    # LOGIN FORM
-    with st.sidebar.expander("🔐 Admin Login"):
-        login_email = st.text_input("Email")
-        login_pass = st.text_input("Password", type="password")
 
-        if st.button("Log In"):
-            # Get Secrets
-            try:
-                valid_emails = st.secrets["ADMIN_EMAILS"].split(",")
-                valid_pass = st.secrets["ADMIN_PASSWORD"]
-            except:
-                valid_emails = []
-                valid_pass = "admin"  # Fallback
-
-            # Check Credentials
-            if login_email in valid_emails and login_pass == valid_pass:
-                st.session_state.is_admin = True
-                st.session_state.current_user = login_email
-                st.rerun()  # Refresh to unlock
-            else:
-                st.error("Invalid Email or Password")
-else:
-    # LOGGED IN VIEW
+# CASE 1: USER IS LOGGED IN (Show Admin Tools)
+if st.session_state.is_admin:
     st.sidebar.success(f"👤 **{st.session_state.current_user}**")
-    st.sidebar.caption("Admin Access Active")
 
     # VISITOR COUNTER (Only visible to Admin)
     st.sidebar.markdown(
@@ -122,6 +103,31 @@ else:
         st.session_state.is_admin = False
         st.session_state.current_user = "Guest"
         st.rerun()
+
+# CASE 2: USER IS NOT LOGGED IN BUT HAS "MAGIC LINK" (Show Login Form)
+elif show_login:
+    with st.sidebar.expander("🔐 Admin Login", expanded=True):
+        login_email = st.text_input("Email")
+        login_pass = st.text_input("Password", type="password")
+
+        if st.button("Log In"):
+            try:
+                valid_emails = st.secrets["ADMIN_EMAILS"].split(",")
+                valid_pass = st.secrets["ADMIN_PASSWORD"]
+            except:
+                valid_emails = []
+                valid_pass = "admin"
+
+            if login_email in valid_emails and login_pass == valid_pass:
+                st.session_state.is_admin = True
+                st.session_state.current_user = login_email
+                st.rerun()
+            else:
+                st.error("Invalid Credentials")
+
+# CASE 3: REGULAR USER (Show Nothing)
+else:
+    st.sidebar.caption("Research Edition v2.0")
 
 st.sidebar.markdown("---")
 
