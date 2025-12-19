@@ -5,19 +5,19 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from rdkit import Chem
-from rdkit.Chem import Draw, Descriptors, QED
+from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors
 from stmol import showmol
 import py3Dmol
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
 
-# --- CUSTOM CSS (For Professional Look) ---
+# --- CUSTOM CSS (Professional UI) ---
 st.markdown("""
     <style>
     .stButton>button {
         width: 100%;
-        background-color: #4CAF50;
+        background-color: #2E7D32;
         color: white;
         font-weight: bold;
     }
@@ -26,6 +26,7 @@ st.markdown("""
         padding: 15px;
         border-radius: 10px;
         text-align: center;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -46,73 +47,81 @@ try:
     model = load_model()
     featurizer = get_featurizer()
 except:
-    st.error("⚠️ Model files not found. Please ensure 'toxicity_model.pkl' is in the folder.")
+    st.error("⚠️ Model files not found. Ensure 'toxicity_model.pkl' is in the repo.")
 
 
 # --- HELPER FUNCTIONS ---
+
+def check_pains(mol):
+    """Checks for Pan-Assay Interference Compounds (Fake Hits)."""
+    # Simplified PAINS SMARTS patterns (Quinones, Catechols, etc.)
+    pains_smarts = [
+        "O=C1C=CC(=O)C=C1",  # Quinone
+        "c1ccc(O)c(O)c1",  # Catechol
+        "C=C(C=O)C=O"  # Michael Acceptor
+    ]
+    for smarts in pains_smarts:
+        if mol.HasSubstructMatch(Chem.MolFromSmarts(smarts)):
+            return True, "Contains PAINS Substructure (Possible False Positive)"
+    return False, "Passes PAINS Filter"
+
+
 def draw_radar_chart(features, title):
-    # Normalize features to 0-1 scale for the chart
     labels = list(features.keys())
     values = list(features.values())
-
-    # Close the polygon
-    values += values[:1]
+    values += values[:1]  # Close loop
     angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
-    angles += angles[:1]
+    angles += angles[:1]  # Close loop
 
     fig, ax = plt.subplots(figsize=(4, 4), subplot_kw=dict(polar=True))
-    ax.fill(angles, values, color='#4CAF50', alpha=0.25)
-    ax.plot(angles, values, color='#4CAF50', linewidth=2)
+    ax.fill(angles, values, color='#2E7D32', alpha=0.3)
+    ax.plot(angles, values, color='#2E7D32', linewidth=2)
     ax.set_yticklabels([])
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, fontsize=8)
-    ax.set_title(title, y=1.1, fontsize=10, weight='bold')
+    ax.set_xticklabels(labels, fontsize=9, weight='bold')
+    ax.set_title(title, y=1.1, fontsize=11, weight='bold', color="#2E7D32")
     return fig
 
 
-# --- SIDEBAR (THE CONTROL CENTER) ---
+# --- SIDEBAR ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
-st.sidebar.markdown("**Research-Grade Screening Tool**")
+st.sidebar.markdown("**Research-Grade Discovery Platform**")
+st.sidebar.caption("v2.0 | Conference Edition")
 st.sidebar.markdown("---")
 
-# 1. Mode Selection
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
 
-# 2. Analysis Modules (The "Swiss Army Knife" Options)
 st.sidebar.markdown("### ⚙️ Analysis Modules")
 run_tox = st.sidebar.checkbox("Toxicity Prediction (AI)", value=True)
-run_adme = st.sidebar.checkbox("ADME & Lipinski Rules", value=True)
-run_qed = st.sidebar.checkbox("QED Drug-Likeness Score", value=False)
-run_radar = st.sidebar.checkbox("Generate Thesis Radar Plot", value=False)
+run_adme = st.sidebar.checkbox("ADME & Bioavailability", value=True)
+run_advanced = st.sidebar.checkbox("Advanced (PAINS + Complexity)", value=False)
+run_radar = st.sidebar.checkbox("Generate Radar Plot", value=False)
 
 st.sidebar.markdown("---")
-st.sidebar.info("🎓 **For Academic Use Only**\n\n cite: AyurSafe AI v1.0 (2025)")
+st.sidebar.info("🎓 **Citation:** \nAyurSafe AI: GNN-Enhanced Phytochemical Screening Tool (2025).")
 
-# --- MAIN APP LOGIC ---
+# --- MAIN APP ---
 
-# === MODE 1: SINGLE MOLECULE LAB ===
 if mode == "Single Molecule Lab":
     st.title("🧪 In-Silico Drug Discovery Lab")
-    st.markdown("Analyze molecular candidates for Safety, Bioavailability, and Drug-Likeness.")
+    st.markdown("Analyze molecular candidates for Safety, Drug-Likeness, and Manufacturability.")
 
     col_input, col_vis = st.columns([1, 1])
 
     with col_input:
-        # Default: Curcumin (Turmeric)
         smiles = st.text_area("Enter SMILES String:", "COC1=C(C=CC(=C1)C=CC(=O)CC(=O)C=CC2=CC(=C(C=C2)O)OC)O",
                               height=100)
-        analyze_btn = st.button("🚀 Run Analysis")
+        analyze_btn = st.button("🚀 Run Full Analysis")
 
     if analyze_btn and smiles:
         try:
             mol = Chem.MolFromSmiles(smiles)
             if not mol:
-                st.error("Invalid SMILES string.")
+                st.error("Invalid SMILES.")
             else:
-                # --- VISUALIZATION ---
                 with col_vis:
-                    st.markdown("**3D Structure Viewer**")
+                    st.markdown("**3D Structure**")
                     mol_block = Chem.MolToMolBlock(mol)
                     view = py3Dmol.view(width=400, height=250)
                     view.addModel(mol_block, 'mol')
@@ -122,140 +131,121 @@ if mode == "Single Molecule Lab":
 
                 st.markdown("---")
 
-                # --- DYNAMIC ANALYSIS MODULES ---
-
-                # MODULE 1: TOXICITY (AI)
+                # MODULE 1: TOXICITY
                 if run_tox:
-                    st.subheader("1️⃣ Toxicity Profile (AI Prediction)")
+                    st.subheader("1️⃣ Toxicity Profile (AI)")
                     f = featurizer.featurize([smiles])
                     prob = model.predict_proba(f)[0][1]
-                    risk_score = prob * 100
+                    risk = prob * 100
 
                     c1, c2 = st.columns([1, 3])
-                    with c1:
-                        st.metric("Toxicity Risk", f"{risk_score:.1f}%")
+                    c1.metric("Risk Score", f"{risk:.1f}%")
                     with c2:
-                        if risk_score < 40:
-                            st.success("✅ **Predicted SAFE**\n\nSuitable for further lab testing.")
-                        elif risk_score < 70:
-                            st.warning("⚠️ **Moderate Risk**\n\nCheck functional groups.")
+                        if risk < 40:
+                            st.success("✅ **Predicted SAFE**")
+                        elif risk < 70:
+                            st.warning("⚠️ **Moderate Risk**")
                         else:
-                            st.error("☠️ **High Toxicity Risk**\n\nNot recommended.")
+                            st.error("☠️ **High Toxicity**")
 
-                # MODULE 2: ADME & LIPINSKI
+                # MODULE 2: ADME
                 if run_adme:
                     st.markdown("---")
-                    st.subheader("2️⃣ ADME & Bioavailability (Lipinski's Rule)")
+                    st.subheader("2️⃣ ADME & Lipinski Rules")
                     mw = Descriptors.MolWt(mol)
                     logp = Descriptors.MolLogP(mol)
-                    hbd = Descriptors.NumHDonors(mol)
-                    hba = Descriptors.NumHAcceptors(mol)
 
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Mol. Weight", f"{mw:.1f}", "Target: <500")
-                    c2.metric("LogP (Lipophilicity)", f"{logp:.1f}", "Target: <5")
-                    c3.metric("H-Donors", hbd, "Target: <5")
-                    c4.metric("H-Acceptors", hba, "Target: <10")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Mol. Weight", f"{mw:.1f}", "<500")
+                    c2.metric("LogP (Solubility)", f"{logp:.1f}", "<5")
+                    c3.metric("QED Score", f"{QED.qed(mol):.2f}", "0-1")
 
-                    violations = 0
-                    if mw > 500: violations += 1
-                    if logp > 5: violations += 1
-                    if hbd > 5: violations += 1
-                    if hba > 10: violations += 1
-
-                    if violations == 0:
-                        st.success("✅ **Passes Lipinski's Rule of 5** (Good Oral Absorption)")
+                    if mw < 500 and logp < 5:
+                        st.success("✅ **Passes Lipinski Rules** (Good Oral Drug Candidate)")
                     else:
-                        st.warning(f"⚠️ **{violations} Violation(s) Detected** (Absorption issues possible)")
+                        st.warning("⚠️ **Lipinski Violation** (Absorption Issues)")
 
-                # MODULE 3: QED SCORE
-                if run_qed:
+                # MODULE 3: ADVANCED (PAINS + COMPLEXITY)
+                if run_advanced:
                     st.markdown("---")
-                    st.subheader("3️⃣ QED Drug-Likeness Score")
-                    qed_score = QED.qed(mol)
-                    st.progress(qed_score)
-                    st.caption(f"QED Score: **{qed_score:.2f}** (0 = Poor, 1 = Ideal Drug)")
+                    st.subheader("3️⃣ Advanced Filters (Bioinformatics/Chem)")
 
-                    if qed_score > 0.6:
-                        st.success("🌟 Excellent Drug-Like Properties")
+                    # PAINS Check
+                    is_pains, pains_msg = check_pains(mol)
+                    if is_pains:
+                        st.error(f"🚫 {pains_msg}")
                     else:
-                        st.info("ℹ️ Low Drug-Likeness (Common for Natural Products)")
+                        st.success(f"✅ {pains_msg}")
+
+                    # Complexity (BertzCT)
+                    complexity = GraphDescriptors.BertzCT(mol)
+                    st.write(f"**Structural Complexity (BertzCT):** {complexity:.1f}")
+                    if complexity < 800:
+                        st.info("🔹 Low Complexity (Easier to Synthesize)")
+                    else:
+                        st.info("🔶 High Complexity (Difficult Synthesis / Natural Product)")
 
                 # MODULE 4: RADAR PLOT
                 if run_radar:
                     st.markdown("---")
-                    st.subheader("4️⃣ Bioactivity Radar Chart")
-                    # Normalized approximate values for the chart
-                    radar_data = {
-                        "Size (MW)": min(mw / 500, 1.0),
+                    st.subheader("4️⃣ Bioactivity Radar")
+                    mw = Descriptors.MolWt(mol)
+                    logp = Descriptors.MolLogP(mol)
+
+                    data = {
+                        "Size": min(mw / 500, 1.0),
                         "Polarity": min(Descriptors.TPSA(mol) / 140, 1.0),
                         "Insolubility": min(logp / 5, 1.0) if logp > 0 else 0,
                         "Flexibility": min(Descriptors.NumRotatableBonds(mol) / 10, 1.0),
                         "Saturation": Descriptors.FractionCSP3(mol)
                     }
-
-                    fig = draw_radar_chart(radar_data, "Molecular Property Landscape")
+                    fig = draw_radar_chart(data, "Molecular Property Map")
                     c1, c2 = st.columns([1, 2])
-                    with c1:
-                        st.pyplot(fig)
-                    with c2:
-                        st.info(
-                            "💡 **How to read:**\nA good drug candidate typically stays within the green shaded area (balanced properties).")
+                    c1.pyplot(fig)
+                    c2.info(
+                        "This chart maps the 5 key properties of drug-likeness. Ideal candidates stay within the center-green zone.")
 
         except Exception as e:
-            st.error(f"Analysis Failed: {e}")
+            st.error(f"Analysis Error: {e}")
 
-# === MODE 2: BATCH SCREENING ===
 elif mode == "Batch Screening (CSV)":
     st.title("📂 Bulk Research Screening")
-    st.write("Upload a CSV file with a column named `SMILES`.")
+    st.write("Upload CSV with `SMILES` column.")
+    uploaded = st.file_uploader("Upload CSV", type=["csv"])
 
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        if st.button("🚀 Run Batch Analysis"):
+            res_list = []
+            bar = st.progress(0)
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        if 'SMILES' in df.columns:
-            st.write(f"Loaded {len(df)} molecules.")
+            for i, row in df.iterrows():
+                s = row.get('SMILES', '')
+                try:
+                    m = Chem.MolFromSmiles(s)
+                    d = {"SMILES": s}
 
-            if st.button("🚀 Run Batch Analysis"):
-                results = []
-                progress_bar = st.progress(0)
+                    if run_tox:
+                        f = featurizer.featurize([s])
+                        d["Toxicity_Prob"] = round(model.predict_proba(f)[0][1], 3)
 
-                for i, row in df.iterrows():
-                    try:
-                        smiles = row['SMILES']
-                        mol = Chem.MolFromSmiles(smiles)
-                        res = {"SMILES": smiles}
+                    if run_adme:
+                        d["MW"] = round(Descriptors.MolWt(m), 2)
+                        d["LogP"] = round(Descriptors.MolLogP(m), 2)
+                        d["QED"] = round(QED.qed(m), 3)
 
-                        # Apply Selected Modules
-                        if run_tox:
-                            f = featurizer.featurize([smiles])
-                            res["Toxicity_Prob"] = round(model.predict_proba(f)[0][1], 3)
+                    if run_advanced:
+                        is_pains, _ = check_pains(m)
+                        d["PAINS_Alert"] = is_pains
+                        d["Complexity"] = round(GraphDescriptors.BertzCT(m), 1)
 
-                        if run_adme:
-                            res["MW"] = round(Descriptors.MolWt(mol), 2)
-                            res["LogP"] = round(Descriptors.MolLogP(mol), 2)
-                            res["Lipinski_Violations"] = 0
-                            if res["MW"] > 500: res["Lipinski_Violations"] += 1
-                            if res["LogP"] > 5: res["Lipinski_Violations"] += 1
+                    res_list.append(d)
+                except:
+                    res_list.append({"SMILES": s, "Error": "Invalid"})
 
-                        if run_qed:
-                            res["QED_Score"] = round(QED.qed(mol), 3)
+                bar.progress((i + 1) / len(df))
 
-                        results.append(res)
-                    except:
-                        results.append({"SMILES": row['SMILES'], "Error": "Invalid Structure"})
-
-                    progress_bar.progress((i + 1) / len(df))
-
-                results_df = pd.DataFrame(results)
-
-                # Color code toxicity if present
-                if run_tox:
-                    st.subheader("🏆 Ranked Candidates (Safest First)")
-                    results_df = results_df.sort_values(by="Toxicity_Prob")
-                else:
-                    st.subheader("🏆 Analysis Results")
-
-                st.dataframe(results_df)
-                st.download_button("📥 Download Research Data", results_df.to_csv(index=False), "AyurSafe_Results.csv")
+            final_df = pd.DataFrame(res_list)
+            if run_tox: final_df = final_df.sort_values("Toxicity_Prob")
+            st.dataframe(final_df)
+            st.download_button("📥 Download Research Data", final_df.to_csv(index=False), "AyurSafe_Final_Report.csv")
