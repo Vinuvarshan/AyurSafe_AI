@@ -95,7 +95,13 @@ if is_admin:
 
     # LICENSE KEY INPUT (Visible only to you)
     license_key = st.sidebar.text_input("🔑 License Key:", type="password")
-    if license_key == "AyurSafe_Pro_2025":
+    # Load the password securely from Streamlit Secrets
+    try:
+        correct_password = st.secrets["ADMIN_PASSWORD"]
+    except FileNotFoundError:
+        correct_password = "Admin_Setup_Required"  # Fallback if secrets aren't set
+
+    if license_key == correct_password:
         is_premium = True
         st.sidebar.success("✅ Unlimited Access")
 
