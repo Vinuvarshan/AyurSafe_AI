@@ -4,19 +4,13 @@ import joblib
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 from rdkit import Chem
 from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors
 from stmol import showmol
 import py3Dmol
+
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
-
-# --- SESSION STATE INITIALIZATION ---
-if "is_admin" not in st.session_state:
-    st.session_state.is_admin = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = "Guest"
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -29,6 +23,26 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+
+# --- SESSION STATE INITIALIZATION ---
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = "Guest"
+
+# --- 🟢 UNIQUE VISITOR TRACKING (The "Anti-Refresh" Logic) ---
+# 1. Get current URL parameters
+query_params = st.query_params
+
+# 2. Check if this user has the "visited" tag
+if "visited" not in query_params:
+    # A. If NO tag, this is a NEW visitor. Count them!
+    st.markdown(
+        '<img src="https://visitor-badge.laobi.icu/badge?page_id=ayursafe_ai_project_vinu" width="0" height="0" style="display:none">',
+        unsafe_allow_html=True
+    )
+    # B. Mark them as visited in the URL so refreshes don't count
+    st.query_params["visited"] = "true"
 
 
 # --- LOAD MODELS ---
@@ -79,18 +93,16 @@ st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-
 st.sidebar.title("AyurSafe AI 🧬")
 
 # === STEALTH LOGIN LOGIC ===
-query_params = st.query_params
+# Check for "?access=login" in the URL to reveal the admin box
 show_login = query_params.get("access") == "login"
 
 st.sidebar.markdown("---")
 
-# CASE 1: USER IS LOGGED IN (Show Admin Tools)
+# CASE 1: LOGGED IN ADMIN
 if st.session_state.is_admin:
     st.sidebar.success(f"👤 **{st.session_state.current_user}**")
 
-    # VISITOR COUNTER (With Cache Buster)
-    # VISITOR COUNTER (Reliable GitHub-Style Badge)
-    # VISITOR COUNTER (Laobi Badge - Most Reliable)
+    # Show Counter Badge (Just for viewing, doesn't increment public count)
     st.sidebar.markdown(
         """
         <div style="text-align: center;">
@@ -99,14 +111,14 @@ if st.session_state.is_admin:
         """,
         unsafe_allow_html=True
     )
-    st.sidebar.caption("Total Visitors")
+    st.sidebar.caption("Total Unique Visitors")
 
     if st.sidebar.button("Log Out"):
         st.session_state.is_admin = False
         st.session_state.current_user = "Guest"
         st.rerun()
 
-# CASE 2: USER IS NOT LOGGED IN BUT HAS "MAGIC LINK" (Show Login Form)
+# CASE 2: LOGIN FORM (Only visible with Secret Link)
 elif show_login:
     with st.sidebar.expander("🔐 Admin Login", expanded=True):
         login_email = st.text_input("Email")
@@ -127,7 +139,7 @@ elif show_login:
             else:
                 st.error("Invalid Credentials")
 
-# CASE 3: REGULAR USER (Show Nothing)
+# CASE 3: REGULAR USER
 else:
     st.sidebar.caption("Research Edition v2.0")
 
@@ -144,7 +156,7 @@ run_radar = st.sidebar.checkbox("Generate Radar Plot", value=False)
 
 st.sidebar.markdown("---")
 
-# SHOW FREE LIMIT WARNING IF NOT LOGGED IN
+# FREE LIMIT WARNING
 if not st.session_state.is_admin:
     st.sidebar.info("🔒 **Free Version**\nBatch Limit: 5 Molecules.")
     st.sidebar.markdown("[📩 **Contact for Premium**](mailto:your.email@gmail.com)")
