@@ -90,12 +90,11 @@ if st.session_state.is_admin:
 
     # VISITOR COUNTER (With Cache Buster)
     # VISITOR COUNTER (Reliable GitHub-Style Badge)
+    # VISITOR COUNTER (Laobi Badge - Most Reliable)
     st.sidebar.markdown(
         """
         <div style="text-align: center;">
-            <a href="https://github.com/vinu/ayursafe">
-                <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fayursafeai.streamlit.app&count_bg=%232E7D32&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=Total+Visitors&edge_flat=false" alt="Hits"/>
-            </a>
+            <img src="https://visitor-badge.laobi.icu/badge?page_id=ayursafe_ai_project_vinu" alt="Visitors">
         </div>
         """,
         unsafe_allow_html=True
