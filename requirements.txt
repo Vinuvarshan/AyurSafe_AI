@@ -6,3 +6,5 @@ rdkit
 stmol
 py3Dmol
 matplotlib
+ipywidgets
+ipython_genutils
