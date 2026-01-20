@@ -61,10 +61,14 @@ except:
 
 # --- HELPER FUNCTIONS ---
 # --- NEW: PROFESSIONAL PAINS FILTER ---
+# --- FIX: CORRECTED PAINS FILTER ---
 def check_pains(mol):
     # Load the standard PAINS database from RDKit
     params = FilterCatalogParams()
-    params.AddCatalogs(FilterCatalogParams.FilterCatalogs.PAINS)
+
+    # FIX: Use AddCatalog (Singular), not AddCatalogs
+    params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
+
     catalog = FilterCatalog(params)
 
     # Check if our molecule matches any PAINS pattern
