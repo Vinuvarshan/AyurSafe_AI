@@ -62,21 +62,24 @@ except:
 # --- HELPER FUNCTIONS ---
 # --- NEW: PROFESSIONAL PAINS FILTER ---
 # --- FIX: CORRECTED PAINS FILTER ---
+# --- SAFE MODE: PAINS FILTER ---
 def check_pains(mol):
-    # Load the standard PAINS database from RDKit
-    params = FilterCatalogParams()
+    try:
+        # Import inside the function to prevent startup crashes
+        from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 
-    # FIX: Use AddCatalog (Singular), not AddCatalogs
-    params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
+        params = FilterCatalogParams()
+        params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
+        catalog = FilterCatalog(params)
 
-    catalog = FilterCatalog(params)
+        if catalog.HasMatch(mol):
+            entry = catalog.GetFirstMatch(mol)
+            return True, f"ALERT: PAINS Structure Detected ({entry.GetDescription()})"
 
-    # Check if our molecule matches any PAINS pattern
-    if catalog.HasMatch(mol):
-        # Get the specific warning (e.g., "Quinone_A")
-        entry = catalog.GetFirstMatch(mol)
-        warning = entry.GetDescription()
-        return True, f"ALERT: PAINS Structure Detected ({warning})"
+    except Exception as e:
+        # If RDKit fails, we don't crash the app. We just warn the user.
+        print(f"PAINS Filter Error: {e}")
+        return False, "PAINS Filter Unavailable (System Limit)"
 
     return False, "Passes PAINS Filter (Clean)"
 
