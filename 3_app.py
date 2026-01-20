@@ -401,8 +401,22 @@ elif mode == "Batch Screening (CSV)":
     uploaded = st.file_uploader("Upload CSV", type=["csv"])
     if uploaded:
         df = pd.read_csv(uploaded)
+
+        # --- THIS WAS MISSING: PREMIUM CHECK ---
+        limit = 5
+        if st.session_state.is_admin:
+            st.success(f"🔓 Premium Active: Analyzing {len(df)} molecules (Unlimited)")
+        else:
+            if len(df) > limit:
+                st.error(f"❌ **Free Limit Exceeded!**")
+                st.error(f"Your file has {len(df)} molecules. The Free version allows only {limit}.")
+                st.markdown("[📩 **Contact Us for Premium**](mailto:your.email@gmail.com)")
+                st.stop()
+            else:
+                st.info(f"Free Mode: Analyzing {len(df)} molecules (Limit: {limit})")
+        # ---------------------------------------
+
         if st.button("🚀 Run Batch Analysis"):
-            # (Batch logic remains same, just adding PAINS check)
             res_list = []
             bar = st.progress(0)
             for i, row in df.iterrows():
