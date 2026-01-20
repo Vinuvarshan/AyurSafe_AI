@@ -241,6 +241,97 @@ def create_pdf(smiles, risk_score, adme_data):
     return pdf.output(dest='S').encode('latin-1')
 
 
+def create_batch_pdf(results_list):
+    pdf = PDFReport()
+    for item in results_list:
+        if "Error" in item: continue
+
+        # Add a page for each molecule
+        pdf.add_page()
+
+        # --- REUSE THE SAME LOGIC FROM SINGLE REPORT ---
+        # (We basically run the same drawing code for every molecule in the loop)
+
+        # 1. Header & Result
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_fill_color(230, 230, 230)
+        pdf.cell(0, 10, f"Analysis for: {item['SMILES'][:30]}...", 0, 1, fill=True)
+        pdf.ln(2)
+
+        risk_score = item['Toxicity'] * 100  # Convert back to percentage
+        adme_data = item['FULL_ADME']  # Retrieve the hidden data
+
+        pdf.set_font("Arial", size=12)
+        if risk_score < 40:
+            prediction = "Safe Candidate"
+            pdf.set_text_color(0, 100, 0)
+        elif risk_score < 70:
+            prediction = "Moderate Risk (Bioactive)"
+            pdf.set_text_color(204, 102, 0)
+        else:
+            prediction = "Toxic / High Risk"
+            pdf.set_text_color(200, 0, 0)
+
+        pdf.cell(0, 8, f"Predicted Class: {prediction}", 0, 1)
+        pdf.cell(0, 8, f"Toxicity Risk Score: {risk_score:.2f}%", 0, 1)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
+
+        # 2. Chemical Identification
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Chemical Details", 0, 1, fill=True)
+        pdf.ln(2)
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(0, 5, f"SMILES: {item['SMILES']}")
+        pdf.cell(0, 8, f"Formula: {adme_data['Molecular Formula']}", 0, 1)
+        pdf.ln(5)
+
+        # 3. Physicochemical Profile
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Physicochemical Profile", 0, 1, fill=True)
+        pdf.ln(2)
+        pdf.set_font("Arial", size=11)
+
+        phys_keys = ["Molecular Weight", "Molar Refractivity", "Fraction Csp3", "LogP (Lipophilicity)", "TPSA",
+                     "Rotatable Bonds", "H-Bond Donors", "H-Bond Acceptors"]
+        for i, key in enumerate(phys_keys):
+            pdf.cell(90, 8, f"{key}: {adme_data[key]}", 0, 0)
+            if (i + 1) % 2 == 0:
+                pdf.ln(8)
+        pdf.ln(10)
+
+        # 4. Rules & PAINS
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Drug-Likeness & PAINS Filters", 0, 1, fill=True)
+        pdf.ln(2)
+
+        rules = {
+            "Lipinski Rule": adme_data["Lipinski Rule"],
+            "Veber Rule": adme_data["Veber Rule"],
+            "PAINS Alert": adme_data["PAINS Filter Check"],
+            "QED Score": adme_data["QED Drug-Likeness"],
+            "Bioavailability": adme_data["Bioavailability Model"]
+        }
+
+        for key, value in rules.items():
+            pdf.set_font("Arial", 'B', 11)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(70, 8, f"{key}:", 0, 0)
+
+            if "Moderate" in value or "Bioactive" in value:
+                pdf.set_text_color(204, 102, 0)
+            elif "FAILED" in value or "ALERT" in value or "Toxic" in value or "Low Absorption" in value:
+                pdf.set_text_color(180, 0, 0)
+            elif "PASSED" in value or "Passes" in value or "Safe" in value or "High" in value or "Yolk" in value:
+                pdf.set_text_color(0, 100, 0)
+            else:
+                pdf.set_text_color(0, 0, 0)
+
+            pdf.set_font("Arial", size=11)
+            pdf.cell(0, 8, value, 0, 1)
+
+    return pdf.output(dest='S').encode('latin-1')
+
 # --- SIDEBAR LOGIC (SECURE) ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
@@ -414,19 +505,34 @@ elif mode == "Batch Screening (CSV)":
                     m = Chem.MolFromSmiles(s)
                     adme = calculate_adme_properties(m)
                     f = featurizer.featurize([s])
-                    risk = round(model.predict_proba(f)[0][1], 3)
+                    risk = round(model.predict_proba(f)[0][1], 3)  # Keep as float 0.59
 
                     row_data = {
                         "SMILES": s,
                         "Toxicity": risk,
                         "MW": adme['Molecular Weight'],
-                        "PAINS": adme['PAINS Filter Check']
+                        "PAINS": adme['PAINS Filter Check'],
+                        "FULL_ADME": adme  # <--- WE SAVE THIS NOW FOR THE PDF
                     }
                     res_list.append(row_data)
                 except:
                     res_list.append({"SMILES": s, "Error": "Invalid"})
                 bar.progress((i + 1) / len(df))
 
-            final_df = pd.DataFrame(res_list)
+            # Display Results Table (Exclude the big hidden dictionary from view)
+            final_df = pd.DataFrame(res_list).drop(columns=["FULL_ADME"], errors='ignore')
             st.dataframe(final_df)
-            st.download_button("📥 Download Data", final_df.to_csv(index=False), "AyurSafe_Results.csv")
+
+            col_d1, col_d2 = st.columns(2)
+
+            # Button 1: CSV Download
+            col_d1.download_button("📥 Download CSV Data", final_df.to_csv(index=False), "AyurSafe_Results.csv")
+
+            # Button 2: PDF Report Download (NEW)
+            batch_pdf = create_batch_pdf(res_list)
+            col_d2.download_button(
+                label="📄 Download Batch PDF Report",
+                data=batch_pdf,
+                file_name="AyurSafe_Batch_Report.pdf",
+                mime="application/pdf"
+            )
