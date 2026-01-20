@@ -115,7 +115,17 @@ def calculate_adme_properties(mol):
     if rotatable_bonds > 10: veber_violations += 1
     if tpsa > 140: veber_violations += 1
     veber_status = "PASSED" if veber_violations == 0 else "FAILED"
+    # 4. THE BOILED-EGG LOGIC (Scientific Thresholds)
+    # GI Absorption (The White): TPSA <= 142 AND -2.3 <= LogP <= 6.8
+    # BBB Permeation (The Yolk): TPSA <= 79 AND 0.4 <= LogP <= 6.0
 
+    egg_status = "Low Absorption"  # Default
+
+    if (tpsa <= 142) and (-2.3 <= logp <= 6.8):
+        egg_status = "High GI Absorption ( intestine )"
+
+    if (tpsa <= 79) and (0.4 <= logp <= 6.0):
+        egg_status = "BBB Permeant ( Brain / Yolk )"  # Being in brain implies being absorbed too
     # 4. Pharmacokinetics (Heuristics)
     # High GI Absorption if TPSA < 140
     gi_absorption = "High" if tpsa < 140 else "Low"
@@ -136,7 +146,8 @@ def calculate_adme_properties(mol):
         "Lipinski Rule": lipinski_status,
         "Veber Rule": veber_status,
         "GI Absorption": gi_absorption,
-        "BBB Permeant": bbb_permeant
+        "BBB Permeant": bbb_permeant,
+        "Bioavailability (Egg)": egg_status
     }
 
 
@@ -225,8 +236,10 @@ def create_pdf(smiles, risk_score, adme_data):
         "Veber Rule (GSK)": adme_data["Veber Rule"],
         "QED Score (Drug-Likeness)": adme_data["QED Drug-Likeness"],
         "GI Absorption (Estimated)": adme_data["GI Absorption"],
-        "BBB Permeant (Estimated)": adme_data["BBB Permeant"]
+        "BBB Permeant (Estimated)": adme_data["BBB Permeant"],
+        "Bioavailability Model": adme_data["Bioavailability (Egg)"]
     }
+
 
     for key, value in rules.items():
         pdf.set_font("Arial", 'B', 11)
