@@ -8,3 +8,4 @@ py3Dmol
 matplotlib
 ipywidgets
 ipython_genutils
+fpdf
