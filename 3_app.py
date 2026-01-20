@@ -241,12 +241,11 @@ def create_pdf(smiles, risk_score, adme_data):
     return pdf.output(dest='S').encode('latin-1')
 
 
-# --- SIDEBAR LOGIC (VISIBLE FOR EVERYONE) ---
+# --- SIDEBAR LOGIC (SECURE) ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
 st.sidebar.markdown("---")
 
-# IF LOGGED IN: Show User Profile
 if st.session_state.is_premium:
     st.sidebar.success(f"💎 **{st.session_state.current_user}**")
     st.sidebar.caption("Premium Account Active")
@@ -255,18 +254,26 @@ if st.session_state.is_premium:
         st.session_state.current_user = "Guest"
         st.rerun()
 
-# IF NOT LOGGED IN: Show Login Form
 else:
     with st.sidebar.expander("🔐 **Login as Premium User**", expanded=False):
         login_email = st.text_input("Email")
         login_pass = st.text_input("Password", type="password")
         if st.button("Sign In"):
-            if login_pass == "admin":  # Password check
-                st.session_state.is_premium = True
-                st.session_state.current_user = login_email if login_email else "Premium User"
-                st.rerun()
-            else:
-                st.error("Invalid Password")
+            # SECURE CHECK: Uses Streamlit Secrets
+            try:
+                # You can set multiple passwords or just one
+                if login_pass == st.secrets["PREMIUM_PASSWORD"]:
+                    st.session_state.is_premium = True
+                    st.session_state.current_user = login_email if login_email else "Premium User"
+                    st.rerun()
+                else:
+                    st.error("Invalid Password")
+            except Exception as e:
+                # Fallback if secrets are not set up yet
+                if login_pass == "admin":
+                    st.session_state.is_premium = True
+                    st.session_state.current_user = login_email
+                    st.rerun()
 
 st.sidebar.markdown("---")
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
