@@ -472,6 +472,8 @@ if mode == "Single Molecule Lab":
                 mime="application/pdf"
             )
 
+# --- REPLACE THE ENTIRE 'Batch Screening' BLOCK WITH THIS ---
+
 elif mode == "Batch Screening (CSV)":
     st.title("📂 Bulk Research Screening")
 
@@ -499,39 +501,53 @@ elif mode == "Batch Screening (CSV)":
         if st.button("🚀 Run Batch Analysis"):
             res_list = []
             bar = st.progress(0)
+
+            # 1. PROCESS EACH MOLECULE
             for i, row in df.iterrows():
                 s = row.get('SMILES', '')
                 try:
                     m = Chem.MolFromSmiles(s)
                     adme = calculate_adme_properties(m)
                     f = featurizer.featurize([s])
-                    risk = round(model.predict_proba(f)[0][1], 3)  # Keep as float 0.59
+                    risk = round(model.predict_proba(f)[0][1], 3)
 
                     row_data = {
                         "SMILES": s,
                         "Toxicity": risk,
                         "MW": adme['Molecular Weight'],
                         "PAINS": adme['PAINS Filter Check'],
-                        "FULL_ADME": adme  # <--- WE SAVE THIS NOW FOR THE PDF
+                        "FULL_ADME": adme  # Store hidden data for PDF
                     }
                     res_list.append(row_data)
                 except:
                     res_list.append({"SMILES": s, "Error": "Invalid"})
                 bar.progress((i + 1) / len(df))
 
-            # Display Results Table (Exclude the big hidden dictionary from view)
-            final_df = pd.DataFrame(res_list).drop(columns=["FULL_ADME"], errors='ignore')
-            st.dataframe(final_df)
+            # 2. CREATE & SORT DATAFRAME (Safe -> Toxic)
+            final_df = pd.DataFrame(res_list)
+
+            if "Toxicity" in final_df.columns:
+                final_df = final_df.sort_values(by="Toxicity", ascending=True)
+
+            # Convert sorted DF back to list for the PDF generator so PDF matches the table
+            sorted_res_list = final_df.to_dict('records')
+
+            # 3. DISPLAY RESULTS
+            # Hide the 'FULL_ADME' column from the screen (it's ugly)
+            display_df = final_df.drop(columns=["FULL_ADME"], errors='ignore')
+            st.dataframe(display_df)
 
             col_d1, col_d2 = st.columns(2)
 
             # Button 1: CSV Download
-            col_d1.download_button("📥 Download CSV Data", final_df.to_csv(index=False), "AyurSafe_Results.csv")
+            col_d1.download_button("📥 Download Sorted Data", display_df.to_csv(index=False),
+                                   "AyurSafe_Sorted_Results.csv")
 
-            # Button 2: PDF Report Download (NEW)
-            batch_pdf = create_batch_pdf(res_list)
+            # Button 2: PDF Report Download
+            # Use the NEW function 'create_batch_pdf' we added earlier
+            batch_pdf = create_batch_pdf(sorted_res_list)
             col_d2.download_button(
-                label="📄 Download Batch PDF Report",
+                label="📄 Download Sorted Batch PDF",
                 data=batch_pdf,
                 file_name="AyurSafe_Batch_Report.pdf",
                 mime="application/pdf"
