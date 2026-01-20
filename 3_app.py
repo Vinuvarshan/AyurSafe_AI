@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from rdkit import Chem
-from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors, Lipinski, Crippen, rdMolDescriptors
+from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors, Lipinski, Crippen, rdMolDescriptors,FilterCatalog
+from rdkit.Chem.FilterCatalog import FilterCatalogParams
 from stmol import showmol
 import py3Dmol
 from fpdf import FPDF  # Added FPDF for Report Generation
@@ -59,12 +60,21 @@ except:
 
 
 # --- HELPER FUNCTIONS ---
+# --- NEW: PROFESSIONAL PAINS FILTER ---
 def check_pains(mol):
-    pains_smarts = ["O=C1C=CC(=O)C=C1", "c1ccc(O)c(O)c1", "C=C(C=O)C=O"]
-    for smarts in pains_smarts:
-        if mol.HasSubstructMatch(Chem.MolFromSmarts(smarts)):
-            return True, "Contains PAINS Substructure (Possible False Positive)"
-    return False, "Passes PAINS Filter"
+    # Load the standard PAINS database from RDKit
+    params = FilterCatalogParams()
+    params.AddCatalogs(FilterCatalogParams.FilterCatalogs.PAINS)
+    catalog = FilterCatalog(params)
+
+    # Check if our molecule matches any PAINS pattern
+    if catalog.HasMatch(mol):
+        # Get the specific warning (e.g., "Quinone_A")
+        entry = catalog.GetFirstMatch(mol)
+        warning = entry.GetDescription()
+        return True, f"ALERT: PAINS Structure Detected ({warning})"
+
+    return False, "Passes PAINS Filter (Clean)"
 
 
 def draw_radar_chart(features, title):
@@ -131,7 +141,7 @@ def calculate_adme_properties(mol):
     gi_absorption = "High" if tpsa < 140 else "Low"
     # BBB Permeant if TPSA < 90 (General rule of thumb)
     bbb_permeant = "Yes" if tpsa < 90 else "No"
-
+    is_pains, pains_message = check_pains(mol)
     return {
         "Molecular Formula": formula,
         "Molecular Weight": f"{mw:.2f} g/mol",
@@ -147,7 +157,8 @@ def calculate_adme_properties(mol):
         "Veber Rule": veber_status,
         "GI Absorption": gi_absorption,
         "BBB Permeant": bbb_permeant,
-        "Bioavailability (Egg)": egg_status
+        "Bioavailability (Egg)": egg_status,
+        "PAINS Filter Check": pains_message
     }
 
 
@@ -225,37 +236,49 @@ def create_pdf(smiles, risk_score, adme_data):
             pdf.ln(8)
     pdf.ln(10)
 
-    # Section 4: Drug-Likeness & Pharmacokinetics
+    # --- REPLACE THIS SECTION IN YOUR create_pdf FUNCTION ---
+
+    # Section 4: Drug-Likeness, Pharmacokinetics & PAINS
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "4. Drug-Likeness & Pharmacokinetics", 0, 1, fill=True)
+    pdf.cell(0, 10, "4. Drug-Likeness & PAINS Filters", 0, 1, fill=True)
     pdf.ln(2)
 
-    # Define the rules to display
+    # 1. Define the rules (NOW INCLUDES PAINS)
     rules = {
         "Lipinski Rule (Pfizer)": adme_data["Lipinski Rule"],
         "Veber Rule (GSK)": adme_data["Veber Rule"],
+        "PAINS Filter Check": adme_data["PAINS Alert"],  # <--- Crucial Addition
         "QED Score (Drug-Likeness)": adme_data["QED Drug-Likeness"],
-        "GI Absorption (Estimated)": adme_data["GI Absorption"],
-        "BBB Permeant (Estimated)": adme_data["BBB Permeant"],
         "Bioavailability Model": adme_data["Bioavailability (Egg)"]
     }
 
-
+    # 2. Loop through and apply 3-Color Logic
     for key, value in rules.items():
         pdf.set_font("Arial", 'B', 11)
+        pdf.set_text_color(0, 0, 0)  # Key is always Black
         pdf.cell(70, 8, f"{key}:", 0, 0)
 
-        # Logic to Bold/Red "FAILED" or "Low"
-        if "FAILED" in value or "Toxic" in value:
-            pdf.set_font("Arial", 'B', 11)
+        # --- ENHANCED COLOR LOGIC ---
+        # ORANGE (Moderate / Warning)
+        if "Moderate" in value or "Bioactive" in value:
+            pdf.set_text_color(204, 102, 0)  # Dark Orange
+
+        # RED (Danger / Fail / Alert)
+        # Added 'Low Absorption' so bad bioavailability turns red
+        elif "FAILED" in value or "ALERT" in value or "Toxic" in value or "Low Absorption" in value:
             pdf.set_text_color(180, 0, 0)  # Dark Red
-        elif "PASSED" in value or "High" in value or "Safe" in value:
-            pdf.set_font("Arial", size=11)
+
+        # GREEN (Safe / Pass / Good)
+        # Added 'Yolk' so brain penetration turns green
+        elif "PASSED" in value or "Passes" in value or "Safe" in value or "High" in value or "Yolk" in value:
             pdf.set_text_color(0, 100, 0)  # Dark Green
+
+        # DEFAULT (Black)
         else:
-            pdf.set_font("Arial", size=11)
             pdf.set_text_color(0, 0, 0)
 
+        # Print the Value
+        pdf.set_font("Arial", size=11)
         pdf.cell(0, 8, value, 0, 1)
 
     return pdf.output(dest='S').encode('latin-1')
