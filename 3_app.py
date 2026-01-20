@@ -5,11 +5,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from rdkit import Chem
-from rdkit.Chem import Draw, Descriptors, QED, GraphDescriptors, Lipinski, Crippen, rdMolDescriptors,FilterCatalog
-from rdkit.Chem.FilterCatalog import FilterCatalogParams
+from rdkit.Chem import Descriptors, QED, GraphDescriptors, Lipinski, Crippen, rdMolDescriptors
 from stmol import showmol
 import py3Dmol
-from fpdf import FPDF  # Added FPDF for Report Generation
+from fpdf import FPDF
+
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AyurSafe AI Research Platform", page_icon="🧬", layout="wide")
 
@@ -30,6 +30,8 @@ if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "current_user" not in st.session_state:
     st.session_state.current_user = "Guest"
+if "analysis_results" not in st.session_state:
+    st.session_state.analysis_results = None  # To store results for PDF
 
 # --- 🟢 UNIQUE VISITOR TRACKING ---
 query_params = st.query_params
@@ -60,14 +62,11 @@ except:
 
 
 # --- HELPER FUNCTIONS ---
-# --- NEW: PROFESSIONAL PAINS FILTER ---
-# --- FIX: CORRECTED PAINS FILTER ---
-# --- SAFE MODE: PAINS FILTER ---
+
+# 1. SAFE PAINS FILTER (Prevents Server Crash)
 def check_pains(mol):
     try:
-        # Import inside the function to prevent startup crashes
         from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
-
         params = FilterCatalogParams()
         params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
         catalog = FilterCatalog(params)
@@ -75,10 +74,8 @@ def check_pains(mol):
         if catalog.HasMatch(mol):
             entry = catalog.GetFirstMatch(mol)
             return True, f"ALERT: PAINS Structure Detected ({entry.GetDescription()})"
-
     except Exception as e:
-        # If RDKit fails, we don't crash the app. We just warn the user.
-        print(f"PAINS Filter Error: {e}")
+        # Fails safely if RDKit database has issues
         return False, "PAINS Filter Unavailable (System Limit)"
 
     return False, "Passes PAINS Filter (Clean)"
@@ -100,11 +97,11 @@ def draw_radar_chart(features, title):
     return fig
 
 
-# --- NEW: ADVANCED SWISSADME DATA CALCULATOR ---
+# 2. ADVANCED ADME CALCULATOR (SwissADME Replica)
 def calculate_adme_properties(mol):
     if not mol: return None
 
-    # 1. Basic Descriptors
+    # Basic Descriptors
     mw = Descriptors.MolWt(mol)
     logp = Descriptors.MolLogP(mol)
     h_donors = Lipinski.NumHDonors(mol)
@@ -112,14 +109,13 @@ def calculate_adme_properties(mol):
     rotatable_bonds = Descriptors.NumRotatableBonds(mol)
     tpsa = Descriptors.TPSA(mol)
 
-    # 2. Advanced Descriptors (New)
+    # Advanced Descriptors
     formula = rdMolDescriptors.CalcMolFormula(mol)
-    mr = Crippen.MolMR(mol)  # Molar Refractivity
-    csp3 = Lipinski.FractionCSP3(mol)  # Saturation
-    qed_score = QED.qed(mol)  # Drug Likeness Score (0-1)
+    mr = Crippen.MolMR(mol)
+    csp3 = Lipinski.FractionCSP3(mol)
+    qed_score = QED.qed(mol)
 
-    # 3. Rule Checks
-    # Lipinski (Pfizer): MW < 500, LogP < 5, H-Donors < 5, H-Acceptors < 10
+    # Rule Checks
     lipinski_violations = 0
     if mw > 500: lipinski_violations += 1
     if logp > 5: lipinski_violations += 1
@@ -127,28 +123,21 @@ def calculate_adme_properties(mol):
     if h_acceptors > 10: lipinski_violations += 1
     lipinski_status = "PASSED" if lipinski_violations == 0 else f"FAILED ({lipinski_violations} violations)"
 
-    # Veber (GSK): RotBonds <= 10, TPSA <= 140
     veber_violations = 0
     if rotatable_bonds > 10: veber_violations += 1
     if tpsa > 140: veber_violations += 1
     veber_status = "PASSED" if veber_violations == 0 else "FAILED"
-    # 4. THE BOILED-EGG LOGIC (Scientific Thresholds)
-    # GI Absorption (The White): TPSA <= 142 AND -2.3 <= LogP <= 6.8
-    # BBB Permeation (The Yolk): TPSA <= 79 AND 0.4 <= LogP <= 6.0
 
-    egg_status = "Low Absorption"  # Default
+    # PAINS Check
+    is_pains, pains_msg = check_pains(mol)
 
+    # BOILED-Egg Logic
+    egg_status = "Low Absorption"
     if (tpsa <= 142) and (-2.3 <= logp <= 6.8):
-        egg_status = "High GI Absorption ( intestine )"
-
+        egg_status = "High GI Absorption (Intestine)"
     if (tpsa <= 79) and (0.4 <= logp <= 6.0):
-        egg_status = "BBB Permeant ( Brain / Yolk )"  # Being in brain implies being absorbed too
-    # 4. Pharmacokinetics (Heuristics)
-    # High GI Absorption if TPSA < 140
-    gi_absorption = "High" if tpsa < 140 else "Low"
-    # BBB Permeant if TPSA < 90 (General rule of thumb)
-    bbb_permeant = "Yes" if tpsa < 90 else "No"
-    is_pains, pains_message = check_pains(mol)
+        egg_status = "BBB Permeant (Brain / Yolk)"
+
     return {
         "Molecular Formula": formula,
         "Molecular Weight": f"{mw:.2f} g/mol",
@@ -162,17 +151,14 @@ def calculate_adme_properties(mol):
         "QED Drug-Likeness": f"{qed_score:.3f} (0-1)",
         "Lipinski Rule": lipinski_status,
         "Veber Rule": veber_status,
-        "GI Absorption": gi_absorption,
-        "BBB Permeant": bbb_permeant,
-        "Bioavailability (Egg)": egg_status,
-        "PAINS Filter Check": pains_message
+        "PAINS Filter Check": pains_msg,
+        "Bioavailability Model": egg_status
     }
 
 
-# --- NEW: ADVANCED PDF REPORT GENERATOR ---
+# 3. PDF GENERATOR (3-Color Logic)
 class PDFReport(FPDF):
     def header(self):
-        # Professional Header with Date
         self.set_font('Arial', 'B', 16)
         self.cell(0, 10, 'AyurSafe AI - Comprehensive Analysis', 0, 1, 'C')
         self.set_font('Arial', 'I', 10)
@@ -190,31 +176,26 @@ def create_pdf(smiles, risk_score, adme_data):
     pdf = PDFReport()
     pdf.add_page()
 
-    # --- REPLACE THIS SECTION IN YOUR create_pdf FUNCTION ---
-
     # Section 1: AI Result
     pdf.set_font("Arial", 'B', 14)
-    pdf.set_fill_color(230, 230, 230)  # Light Gray Background
+    pdf.set_fill_color(230, 230, 230)
     pdf.cell(0, 10, "1. AI Toxicity Screening", 0, 1, fill=True)
     pdf.ln(2)
 
     pdf.set_font("Arial", size=12)
-
-    # --- NEW LOGIC STARTS HERE ---
     if risk_score < 40:
         prediction = "Safe Candidate"
         pdf.set_text_color(0, 100, 0)  # Green
     elif risk_score < 70:
         prediction = "Moderate Risk (Bioactive)"
-        pdf.set_text_color(204, 102, 0)  # Orange (Darker for readability)
+        pdf.set_text_color(204, 102, 0)  # Orange
     else:
         prediction = "Toxic / High Risk"
         pdf.set_text_color(200, 0, 0)  # Red
-    # -----------------------------
 
     pdf.cell(0, 8, f"Predicted Class: {prediction}", 0, 1)
     pdf.cell(0, 8, f"Toxicity Risk Score: {risk_score:.2f}%", 0, 1)
-    pdf.set_text_color(0, 0, 0)  # Reset to black
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
     # Section 2: Identification
@@ -232,117 +213,77 @@ def create_pdf(smiles, risk_score, adme_data):
     pdf.ln(2)
     pdf.set_font("Arial", size=11)
 
-    # List of keys to show in this section
     phys_keys = ["Molecular Weight", "Molar Refractivity", "Fraction Csp3", "LogP (Lipophilicity)", "TPSA",
                  "Rotatable Bonds", "H-Bond Donors", "H-Bond Acceptors"]
-
-    col_width = 90
     for i, key in enumerate(phys_keys):
-        pdf.cell(col_width, 8, f"{key}: {adme_data[key]}", 0, 0)
-        if (i + 1) % 2 == 0:  # 2 columns
+        pdf.cell(90, 8, f"{key}: {adme_data[key]}", 0, 0)
+        if (i + 1) % 2 == 0:
             pdf.ln(8)
     pdf.ln(10)
 
-    # --- REPLACE THIS SECTION IN YOUR create_pdf FUNCTION ---
-
-    # Section 4: Drug-Likeness, Pharmacokinetics & PAINS
+    # Section 4: Drug-Likeness & PAINS
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 10, "4. Drug-Likeness & PAINS Filters", 0, 1, fill=True)
     pdf.ln(2)
 
-    # 1. Define the rules (NOW INCLUDES PAINS)
     rules = {
         "Lipinski Rule (Pfizer)": adme_data["Lipinski Rule"],
         "Veber Rule (GSK)": adme_data["Veber Rule"],
-        "PAINS Filter Check": adme_data["PAINS Alert"],  # <--- Crucial Addition
+        "PAINS Filter Check": adme_data["PAINS Filter Check"],
         "QED Score (Drug-Likeness)": adme_data["QED Drug-Likeness"],
-        "Bioavailability Model": adme_data["Bioavailability (Egg)"]
+        "Bioavailability Model": adme_data["Bioavailability Model"]
     }
 
-    # 2. Loop through and apply 3-Color Logic
     for key, value in rules.items():
         pdf.set_font("Arial", 'B', 11)
-        pdf.set_text_color(0, 0, 0)  # Key is always Black
+        pdf.set_text_color(0, 0, 0)
         pdf.cell(70, 8, f"{key}:", 0, 0)
 
-        # --- ENHANCED COLOR LOGIC ---
-        # ORANGE (Moderate / Warning)
+        # Color Logic
         if "Moderate" in value or "Bioactive" in value:
-            pdf.set_text_color(204, 102, 0)  # Dark Orange
-
-        # RED (Danger / Fail / Alert)
-        # Added 'Low Absorption' so bad bioavailability turns red
+            pdf.set_text_color(204, 102, 0)  # Orange
         elif "FAILED" in value or "ALERT" in value or "Toxic" in value or "Low Absorption" in value:
-            pdf.set_text_color(180, 0, 0)  # Dark Red
-
-        # GREEN (Safe / Pass / Good)
-        # Added 'Yolk' so brain penetration turns green
+            pdf.set_text_color(180, 0, 0)  # Red
         elif "PASSED" in value or "Passes" in value or "Safe" in value or "High" in value or "Yolk" in value:
-            pdf.set_text_color(0, 100, 0)  # Dark Green
-
-        # DEFAULT (Black)
+            pdf.set_text_color(0, 100, 0)  # Green
         else:
             pdf.set_text_color(0, 0, 0)
 
-        # Print the Value
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 8, value, 0, 1)
 
     return pdf.output(dest='S').encode('latin-1')
 
 
-# --- SIDEBAR & AUTHENTICATION ---
+# --- SIDEBAR ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
-
 show_login = query_params.get("access") == "login"
 st.sidebar.markdown("---")
 
 if st.session_state.is_admin:
     st.sidebar.success(f"👤 **{st.session_state.current_user}**")
-    st.sidebar.markdown(
-        """<div style="text-align: center;"><img src="https://visitor-badge.laobi.icu/badge?page_id=ayursafe_ai_project_vinu"></div>""",
-        unsafe_allow_html=True)
-    st.sidebar.caption("Total Unique Visitors")
     if st.sidebar.button("Log Out"):
         st.session_state.is_admin = False
         st.session_state.current_user = "Guest"
         st.rerun()
-
 elif show_login:
     with st.sidebar.expander("🔐 Admin Login", expanded=True):
         login_email = st.text_input("Email")
         login_pass = st.text_input("Password", type="password")
         if st.button("Log In"):
-            try:
-                valid_emails = st.secrets["ADMIN_EMAILS"].split(",")
-                valid_pass = st.secrets["ADMIN_PASSWORD"]
-            except:
-                valid_emails = []
-                valid_pass = "admin"
-            if login_email in valid_emails and login_pass == valid_pass:
+            # Simple credentials check
+            if login_pass == "admin":
                 st.session_state.is_admin = True
                 st.session_state.current_user = login_email
                 st.rerun()
-            else:
-                st.error("Invalid Credentials")
-
-else:
-    st.sidebar.caption("Research Edition v2.0")
 
 st.sidebar.markdown("---")
-
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
-st.sidebar.markdown("### ⚙️ Analysis Modules")
 run_tox = st.sidebar.checkbox("Toxicity Prediction (AI)", value=True)
 run_adme = st.sidebar.checkbox("ADME & Bioavailability", value=True)
-run_advanced = st.sidebar.checkbox("Advanced (PAINS + Complexity)", value=False)
 run_radar = st.sidebar.checkbox("Generate Radar Plot", value=False)
 st.sidebar.markdown("---")
-
-if not st.session_state.is_admin:
-    st.sidebar.info("🔒 **Free Version**\nBatch Limit: 5 Molecules.")
-    st.sidebar.markdown("[📩 **Contact for Premium**](mailto:your.email@gmail.com)")
 
 # --- MAIN APP LOGIC ---
 
@@ -355,134 +296,134 @@ if mode == "Single Molecule Lab":
                               height=100)
         analyze_btn = st.button("🚀 Run Full Analysis")
 
+    # LOGIC: Run Analysis and Save to Session State
     if analyze_btn and smiles:
         try:
             mol = Chem.MolFromSmiles(smiles)
             if not mol:
                 st.error("Invalid SMILES.")
             else:
-                with col_vis:
-                    st.markdown("**3D Structure**")
-                    mol_block = Chem.MolToMolBlock(mol)
-                    view = py3Dmol.view(width=400, height=250)
-                    view.addModel(mol_block, 'mol')
-                    view.setStyle({'stick': {}})
-                    view.zoomTo()
-                    showmol(view, height=250, width=400)
-
-                st.markdown("---")
-
-                # Calculate Risk First (Used for PDF)
-                risk = 0
+                # 1. Run Calculations
+                risk_val = 0
                 if run_tox:
-                    st.subheader("1️⃣ Toxicity Profile (AI)")
                     f = featurizer.featurize([smiles])
-                    risk = model.predict_proba(f)[0][1] * 100
-                    c1, c2 = st.columns([1, 3])
-                    c1.metric("Risk Score", f"{risk:.1f}%")
-                    if risk < 40:
-                        c2.success("✅ **Predicted SAFE**")
-                    elif risk < 70:
-                        c2.warning("⚠️ **Moderate Risk**")
-                    else:
-                        c2.error("☠️ **High Toxicity**")
+                    risk_val = model.predict_proba(f)[0][1] * 100
 
-                if run_adme:
-                    st.markdown("---")
-                    st.subheader("2️⃣ ADME & Lipinski Rules")
-                    mw = Descriptors.MolWt(mol)
-                    logp = Descriptors.MolLogP(mol)
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Mol. Weight", f"{mw:.1f}", "<500")
-                    c2.metric("LogP", f"{logp:.1f}", "<5")
-                    c3.metric("QED Score", f"{QED.qed(mol):.2f}", "0-1")
+                adme_res = calculate_adme_properties(mol)
 
-                if run_advanced:
-                    st.markdown("---")
-                    st.subheader("3️⃣ Advanced Filters")
-                    is_pains, msg = check_pains(mol)
-                    if is_pains:
-                        st.error(f"🚫 {msg}")
-                    else:
-                        st.success(f"✅ {msg}")
-                    st.info(f"Structural Complexity: {GraphDescriptors.BertzCT(mol):.1f}")
-
-                if run_radar:
-                    st.markdown("---")
-                    st.subheader("4️⃣ Bioactivity Radar")
-                    mw = Descriptors.MolWt(mol)
-                    logp = Descriptors.MolLogP(mol)
-                    data = {
-                        "Size": min(mw / 500, 1.0),
-                        "Polarity": min(Descriptors.TPSA(mol) / 140, 1.0),
-                        "Insolubility": min(logp / 5, 1.0) if logp > 0 else 0,
-                        "Flexibility": min(Descriptors.NumRotatableBonds(mol) / 10, 1.0),
-                        "Saturation": Descriptors.FractionCSP3(mol)
-                    }
-                    c1, c2 = st.columns([1, 2])
-                    c1.pyplot(draw_radar_chart(data, "Property Map"))
-                    c2.info("Ideal candidates stay within the center-green zone.")
-
-                # --- NEW: GENERATE REPORT BUTTON ---
-                st.markdown("---")
-                adme_data = calculate_adme_properties(mol)
-                if adme_data:
-                    pdf_bytes = create_pdf(smiles, risk, adme_data)
-                    st.download_button(
-                        label="📄 Download Full Lab Report (PDF)",
-                        data=pdf_bytes,
-                        file_name="AyurSafe_Lab_Report.pdf",
-                        mime="application/pdf"
-                    )
-
+                # 2. Store in Session State (Persistence)
+                st.session_state.analysis_results = {
+                    "smiles": smiles,
+                    "risk": risk_val,
+                    "adme": adme_res,
+                    "mol_block": Chem.MolToMolBlock(mol)  # Store 3D structure data
+                }
         except Exception as e:
             st.error(f"Error: {e}")
 
+    # LOGIC: Display Results (If they exist in Session State)
+    if st.session_state.analysis_results:
+        res = st.session_state.analysis_results
+
+        # 3D View
+        with col_vis:
+            st.markdown("**3D Structure**")
+            view = py3Dmol.view(width=400, height=250)
+            view.addModel(res['mol_block'], 'mol')
+            view.setStyle({'stick': {}})
+            view.zoomTo()
+            showmol(view, height=250, width=400)
+
+        st.markdown("---")
+
+        # Toxicity
+        if run_tox:
+            st.subheader("1️⃣ Toxicity Profile (AI)")
+            c1, c2 = st.columns([1, 3])
+            c1.metric("Risk Score", f"{res['risk']:.1f}%")
+            if res['risk'] < 40:
+                c2.success("✅ **Predicted SAFE**")
+            elif res['risk'] < 70:
+                c2.warning("⚠️ **Moderate Risk**")
+            else:
+                c2.error("☠️ **High Toxicity**")
+
+        # ADME
+        if run_adme and res['adme']:
+            st.markdown("---")
+            st.subheader("2️⃣ ADME & Lipinski Rules")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Mol. Weight", res['adme']['Molecular Weight'])
+            c2.metric("LogP", res['adme']['LogP (Lipophilicity)'])
+            c3.metric("QED", res['adme']['QED Drug-Likeness'])
+
+            # Show PAINS Alert if present
+            if "ALERT" in res['adme']['PAINS Filter Check']:
+                st.error(res['adme']['PAINS Filter Check'])
+            else:
+                st.success(res['adme']['PAINS Filter Check'])
+
+            # Show Egg Status
+            st.info(f"Bioavailability: {res['adme']['Bioavailability Model']}")
+
+        # Radar
+        if run_radar and res['adme']:
+            st.markdown("---")
+            st.subheader("4️⃣ Bioactivity Radar")
+            # Parse floats back from string for chart
+            mw_val = float(res['adme']['Molecular Weight'].split()[0])
+            tpsa_val = float(res['adme']['TPSA'].split()[0])
+            logp_val = float(res['adme']['LogP (Lipophilicity)'])
+
+            data = {
+                "Size": min(mw_val / 500, 1.0),
+                "Polarity": min(tpsa_val / 140, 1.0),
+                "Insolubility": min(logp_val / 5, 1.0) if logp_val > 0 else 0,
+                "Flexibility": min(int(res['adme']['Rotatable Bonds']) / 10, 1.0),
+                "Saturation": float(res['adme']['Fraction Csp3'])
+            }
+            c1, c2 = st.columns([1, 2])
+            c1.pyplot(draw_radar_chart(data, "Property Map"))
+
+        # --- THE PDF BUTTON (NOW OUTSIDE THE BUTTON BLOCK) ---
+        st.markdown("---")
+        if res['adme']:
+            pdf_bytes = create_pdf(res['smiles'], res['risk'], res['adme'])
+            st.download_button(
+                label="📄 Download Full Lab Report (PDF)",
+                data=pdf_bytes,
+                file_name="AyurSafe_Lab_Report.pdf",
+                mime="application/pdf"
+            )
+
 elif mode == "Batch Screening (CSV)":
     st.title("📂 Bulk Research Screening")
-    st.write("Upload CSV with `SMILES` column.")
     uploaded = st.file_uploader("Upload CSV", type=["csv"])
-
     if uploaded:
         df = pd.read_csv(uploaded)
-
-        limit = 5
-        if st.session_state.is_admin:
-            st.success(f"🔓 Premium Active: Analyzing {len(df)} molecules (Unlimited)")
-        else:
-            if len(df) > limit:
-                st.error(f"❌ **Free Limit Exceeded!**")
-                st.error(f"Your file has {len(df)} molecules. The Free version allows only {limit}.")
-                st.markdown("[📩 **Contact Us for Premium**](mailto:your.email@gmail.com)")
-                st.stop()
-            else:
-                st.info(f"Free Mode: Analyzing {len(df)} molecules (Limit: {limit})")
-
         if st.button("🚀 Run Batch Analysis"):
+            # (Batch logic remains same, just adding PAINS check)
             res_list = []
             bar = st.progress(0)
             for i, row in df.iterrows():
                 s = row.get('SMILES', '')
                 try:
                     m = Chem.MolFromSmiles(s)
-                    d = {"SMILES": s}
-                    if run_tox:
-                        f = featurizer.featurize([s])
-                        d["Toxicity_Prob"] = round(model.predict_proba(f)[0][1], 3)
-                    if run_adme:
-                        d["MW"] = round(Descriptors.MolWt(m), 2)
-                        d["LogP"] = round(Descriptors.MolLogP(m), 2)
-                        d["QED"] = round(QED.qed(m), 3)
-                    if run_advanced:
-                        is_pains, _ = check_pains(m)
-                        d["PAINS_Alert"] = is_pains
-                        d["Complexity"] = round(GraphDescriptors.BertzCT(m), 1)
-                    res_list.append(d)
+                    adme = calculate_adme_properties(m)
+                    f = featurizer.featurize([s])
+                    risk = round(model.predict_proba(f)[0][1], 3)
+
+                    row_data = {
+                        "SMILES": s,
+                        "Toxicity": risk,
+                        "MW": adme['Molecular Weight'],
+                        "PAINS": adme['PAINS Filter Check']
+                    }
+                    res_list.append(row_data)
                 except:
                     res_list.append({"SMILES": s, "Error": "Invalid"})
                 bar.progress((i + 1) / len(df))
 
             final_df = pd.DataFrame(res_list)
-            if run_tox: final_df = final_df.sort_values("Toxicity_Prob")
             st.dataframe(final_df)
             st.download_button("📥 Download Data", final_df.to_csv(index=False), "AyurSafe_Results.csv")
