@@ -26,8 +26,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- SESSION STATE INITIALIZATION ---
-if "is_admin" not in st.session_state:
-    st.session_state.is_admin = False
+if "is_premium" not in st.session_state:
+    st.session_state.is_premium = False
 if "current_user" not in st.session_state:
     st.session_state.current_user = "Guest"
 if "analysis_results" not in st.session_state:
@@ -241,27 +241,32 @@ def create_pdf(smiles, risk_score, adme_data):
     return pdf.output(dest='S').encode('latin-1')
 
 
-# --- SIDEBAR ---
+# --- SIDEBAR LOGIC (VISIBLE FOR EVERYONE) ---
 st.sidebar.image("https://img.freepik.com/free-vector/flat-design-ayurveda-logo-template_23-2149405626.jpg", width=120)
 st.sidebar.title("AyurSafe AI 🧬")
-show_login = query_params.get("access") == "login"
 st.sidebar.markdown("---")
 
-if st.session_state.is_admin:
-    st.sidebar.success(f"👤 **{st.session_state.current_user}**")
+# IF LOGGED IN: Show User Profile
+if st.session_state.is_premium:
+    st.sidebar.success(f"💎 **{st.session_state.current_user}**")
+    st.sidebar.caption("Premium Account Active")
     if st.sidebar.button("Log Out"):
-        st.session_state.is_admin = False
+        st.session_state.is_premium = False
         st.session_state.current_user = "Guest"
         st.rerun()
-elif show_login:
-    with st.sidebar.expander("🔐 Admin Login", expanded=True):
+
+# IF NOT LOGGED IN: Show Login Form
+else:
+    with st.sidebar.expander("🔐 **Login as Premium User**", expanded=False):
         login_email = st.text_input("Email")
         login_pass = st.text_input("Password", type="password")
-        if st.button("Log In"):
-            if login_pass == "admin":
-                st.session_state.is_admin = True
-                st.session_state.current_user = login_email
+        if st.button("Sign In"):
+            if login_pass == "admin":  # Password check
+                st.session_state.is_premium = True
+                st.session_state.current_user = login_email if login_email else "Premium User"
                 st.rerun()
+            else:
+                st.error("Invalid Password")
 
 st.sidebar.markdown("---")
 mode = st.sidebar.radio("Select Workflow:", ["Single Molecule Lab", "Batch Screening (CSV)"])
@@ -372,13 +377,13 @@ if mode == "Single Molecule Lab":
 elif mode == "Batch Screening (CSV)":
     st.title("📂 Bulk Research Screening")
 
-    # --- FIXED: SHOW STATUS IMMEDIATELY (Before Upload) ---
+    # --- PREMIUM CHECK ---
     limit = 5
-    if st.session_state.is_admin:
-        st.success("🔓 **Premium Active:** Unlimited molecules allowed.")
+    if st.session_state.is_premium:
+        st.success("💎 **Premium Active:** Unlimited molecules allowed.")
     else:
         st.info(f"🔒 **Free Mode:** Limit {limit} molecules.")
-    # ------------------------------------------------------
+    # ---------------------
 
     st.write("Upload CSV with `SMILES` column.")
     uploaded = st.file_uploader("Upload CSV", type=["csv"])
@@ -386,11 +391,11 @@ elif mode == "Batch Screening (CSV)":
     if uploaded:
         df = pd.read_csv(uploaded)
 
-        if not st.session_state.is_admin:
+        if not st.session_state.is_premium:
             if len(df) > limit:
                 st.error(f"❌ **Free Limit Exceeded!**")
                 st.error(f"Your file has {len(df)} molecules. The Free version allows only {limit}.")
-                st.markdown("[📩 **Contact Us for Premium**](mailto:your.email@gmail.com)")
+                st.markdown("👉 **Login as Premium User in the Sidebar to unlock.**")
                 st.stop()
 
         if st.button("🚀 Run Batch Analysis"):
