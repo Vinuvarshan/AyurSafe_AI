@@ -161,6 +161,8 @@ def create_pdf(smiles, risk_score, adme_data):
     pdf = PDFReport()
     pdf.add_page()
 
+    # --- REPLACE THIS SECTION IN YOUR create_pdf FUNCTION ---
+
     # Section 1: AI Result
     pdf.set_font("Arial", 'B', 14)
     pdf.set_fill_color(230, 230, 230)  # Light Gray Background
@@ -168,13 +170,18 @@ def create_pdf(smiles, risk_score, adme_data):
     pdf.ln(2)
 
     pdf.set_font("Arial", size=12)
-    prediction = "Safe Candidate" if risk_score < 40 else "Toxic / High Risk"
 
-    # Color code the result text
+    # --- NEW LOGIC STARTS HERE ---
     if risk_score < 40:
+        prediction = "Safe Candidate"
         pdf.set_text_color(0, 100, 0)  # Green
+    elif risk_score < 70:
+        prediction = "Moderate Risk (Bioactive)"
+        pdf.set_text_color(204, 102, 0)  # Orange (Darker for readability)
     else:
+        prediction = "Toxic / High Risk"
         pdf.set_text_color(200, 0, 0)  # Red
+    # -----------------------------
 
     pdf.cell(0, 8, f"Predicted Class: {prediction}", 0, 1)
     pdf.cell(0, 8, f"Toxicity Risk Score: {risk_score:.2f}%", 0, 1)
